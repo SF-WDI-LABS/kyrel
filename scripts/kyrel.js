@@ -27,13 +27,12 @@ var kyrel = {
   color: colors.blue
 };
 
-function play() {
+function play(newMain) {
+  var main = newMain || main;
   var return_value = main();
   if(typeof return_value !== 'undefined') {
     $(".instructions").append("<div><strong>returned "+return_value+"</strong></div>");
   }
-  $(".play").hide();
-  $(".reset").show();
 }
 
 function initializeRow() {
@@ -107,15 +106,97 @@ function onGreen() {
   return currentSquare().find(".dot.dot-green").length > 0;
 }
 
+function CodeArea($el, store) {
+  this.$el = $el;
+
+  var self = this;
+  this.$el.on("focus", function(){
+    self.removeError();
+  });
+
+  this.rawCode = function(){
+    return store.getItem("rawCode") || "// code in here!";
+  }
+  this.save = function(){
+    var rawCode = this.$el[0].innerText; // innerText because we want line breaks
+    store.setItem("rawCode", rawCode);
+  }
+  this.render = function(){
+    this.$el.text(this.rawCode());
+  }
+  this.eval = function(cb){
+    this.removeError();
+    this.save();
+    try {
+      cb( this.rawCode() );
+    } catch (err) {
+      this.displayError();
+    }
+  }
+  this.displayError = function(){
+    this.$el.addClass("has-error");
+  }
+  this.removeError = function(){
+    this.$el.removeClass("has-error");
+  }
+
+}
+
+// optional OO interface;
+var k = o = {
+  moveRight,
+  moveLeft,
+  draw,
+  erase,
+  useGreen,
+  useBlue,
+  onBlue,
+  onGreen
+};
+
 $(document).ready(function() {
   var rando = parseInt(Math.random()*10);
   console.log("Our random number for this run is "+rando);
 
-  //attach listeners
-  $(".play").click(play);
+  window.onhashchange = updateInitialState;
+  function updateInitialState(){
+    window.initial_state = window.location.hash.slice(1).split("");
+    initializeRow();
+  }
+  if (!window.location.hash) {
+    window.history.replaceState(null, null, "#.....")
+  }
 
-  // Start it up!
+  updateInitialState();
   initializeRow();
   updateRow();
+
+  var codeArea = new CodeArea($("#coding-area"), window.localStorage);
+  codeArea.render();
+
+  $(".play").click(function tryPlay() {
+    codeArea.eval(function(rawCode){
+      var newMain = new Function( rawCode );
+      play(newMain);
+    });
+  });
+
+  $(".reset").click(function(){
+    codeArea.save();
+    window.location.reload();
+  })
+
+  var rotation = {
+    ".":"b",
+    "b":"g",
+    "g":".",
+  };
+  $("td").click(function(event){
+    var index = event.currentTarget.cellIndex;
+    initial_state[index] = rotation[ initial_state[index] ];
+    window.history.replaceState(null, null, "#"+initial_state.join(""))
+    updateInitialState();
+  })
+
 });
 
